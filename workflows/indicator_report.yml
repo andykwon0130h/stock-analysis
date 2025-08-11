@@ -1,0 +1,67 @@
+name: Indicator Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      TICKERS:
+        description: "Comma-separated tickers (e.g., AAPL,MSFT,005930.KS)"
+        required: false
+        default: "AAPL,MSFT,005930.KS"
+      DATES:
+        description: "Comma-separated dates YYYY-MM-DD (e.g., 2024-06-03,2023-10-31)"
+        required: false
+        default: "2024-06-03"
+      RSI_LEN:
+        required: false
+        default: "14"
+      STOCH_LEN:
+        required: false
+        default: "14"
+      SMOOTH_K:
+        required: false
+        default: "3"
+      SMOOTH_D:
+        required: false
+        default: "3"
+      SMA_WINDOW:
+        required: false
+        default: "200"
+  schedule:
+    # 매일 00:30 UTC 실행 (한국 09:30 KST) — 필요 없으면 지우세요
+    - cron: "30 0 * * *"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run script
+        env:
+          TICKERS: ${{ github.event.inputs.TICKERS || 'AAPL,MSFT,005930.KS' }}
+          DATES: ${{ github.event.inputs.DATES || '2024-06-03' }}
+          RSI_LEN: ${{ github.event.inputs.RSI_LEN || '14' }}
+          STOCH_LEN: ${{ github.event.inputs.STOCH_LEN || '14' }}
+          SMOOTH_K: ${{ github.event.inputs.SMOOTH_K || '3' }}
+          SMOOTH_D: ${{ github.event.inputs.SMOOTH_D || '3' }}
+          SMA_WINDOW: ${{ github.event.inputs.SMA_WINDOW || '200' }}
+        run: |
+          python indicator_lookup.py
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: indicators_result
+          path: indicators_result.csv
+          if-no-files-found: error
