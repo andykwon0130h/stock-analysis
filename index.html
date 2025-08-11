@@ -1,81 +1,56 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Indicators Result</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:24px}
     h1{margin:0 0 8px}
     .meta{color:#666; margin:0 0 16px}
-    table{border-collapse:collapse; width:100%}
-    th,td{padding:10px; border-bottom:1px solid #eee; text-align:left}
-    tr:hover{background:#fafafa}
-    .data-table thead th{position:sticky; top:0; background:#fff}
-    .bar{display:inline-block; height:8px; min-width:2px}
+    table.dataTable thead th{position:sticky; top:0; background:#fff}
   </style>
 </head>
 <body>
   <h1>Indicators Result</h1>
-  <p class="meta">Updated: 2025-08-11 12:29 UTC</p>
-  <p><a href="./indicators_result.csv" download>CSV 다운로드</a></p>
-  <table class="dataframe data-table">
-  <thead>
-    <tr style="text-align: right;">
-      <th>Ticker</th>
-      <th>ReportDate</th>
-      <th>Close</th>
-      <th>RSI_14</th>
-      <th>Stoch%K(14,3)</th>
-      <th>Stoch%D(3)</th>
-      <th>SMA_200</th>
-      <th>Gap_from_SMA200_%</th>
-      <th>Price&gt;200SMA</th>
-      <th>NASDAQ_Drawdown_%</th>
-      <th>Error</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>AAPL</td>
-      <td>2024-05-31</td>
-      <td>192.25</td>
-      <td>67.04</td>
-      <td>83.48</td>
-      <td>78.68</td>
-      <td>181.2386</td>
-      <td>6.08</td>
-      <td>True</td>
-      <td>-1.67</td>
-      <td>NaN</td>
-    </tr>
-    <tr>
-      <td>MSFT</td>
-      <td>2024-05-31</td>
-      <td>415.13</td>
-      <td>46.61</td>
-      <td>45.11</td>
-      <td>64.32</td>
-      <td>378.9645</td>
-      <td>9.54</td>
-      <td>True</td>
-      <td>-1.67</td>
-      <td>NaN</td>
-    </tr>
-    <tr>
-      <td>005930.KS</td>
-      <td>2024-06-03</td>
-      <td>75700.00</td>
-      <td>44.53</td>
-      <td>10.78</td>
-      <td>12.48</td>
-      <td>73425.5000</td>
-      <td>3.10</td>
-      <td>True</td>
-      <td>-1.67</td>
-      <td>NaN</td>
-    </tr>
-  </tbody>
-</table>
+  <p class="meta">
+    최신 CSV: <a href="./indicators_result.csv" download>다운로드</a>
+  </p>
+  <table id="tbl" class="display" style="width:100%">
+    <thead></thead>
+    <tbody></tbody>
+  </table>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    Papa.parse('indicators_result.csv?t=' + Date.now(), {
+      download: true,
+      header: true,
+      dynamicTyping: true,
+      complete: (res) => {
+        const data = res.data.filter(row => Object.keys(row).length);
+        if(!data.length) return;
+        const cols = Object.keys(data[0]);
+        $('#tbl thead').html('<tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr>');
+        const rowsHtml = data.map(r => '<tr>' + cols.map(c => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>').join('');
+        $('#tbl tbody').html(rowsHtml);
+        $('#tbl').DataTable({
+          pageLength: 25,
+          lengthMenu: [10, 25, 50, 100],
+          order: [],
+          language: {
+            search: '검색:',
+            lengthMenu: '_MENU_ 개씩 보기',
+            info: '_TOTAL_개 중 _START_–_END_',
+            infoEmpty: '표시할 항목 없음',
+            zeroRecords: '일치하는 항목이 없습니다',
+            paginate: { first:'처음', last:'마지막', next:'다음', previous:'이전' }
+          }
+        });
+      }
+    });
+  </script>
 </body>
 </html>
