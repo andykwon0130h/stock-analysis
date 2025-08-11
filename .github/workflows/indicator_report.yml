@@ -5,17 +5,29 @@ on:
     inputs:
       TICKERS:
         description: "Comma-separated tickers (e.g., AAPL,MSFT,005930.KS)"
+        required: false
         default: "AAPL,MSFT,005930.KS"
       DATES:
         description: "Comma-separated dates YYYY-MM-DD (e.g., 2024-06-03,2023-10-31)"
+        required: false
         default: "2024-06-03"
-      RSI_LEN:    { default: "14" }
-      STOCH_LEN:  { default: "14" }
-      SMOOTH_K:   { default: "3" }
-      SMOOTH_D:   { default: "3" }
-      SMA_WINDOW: { default: "200" }
+      RSI_LEN:
+        required: false
+        default: "14"
+      STOCH_LEN:
+        required: false
+        default: "14"
+      SMOOTH_K:
+        required: false
+        default: "3"
+      SMOOTH_D:
+        required: false
+        default: "3"
+      SMA_WINDOW:
+        required: false
+        default: "200"
   schedule:
-    - cron: "30 0 * * *"  # 매일 00:30 UTC (KST 09:30)
+    - cron: "30 0 * * *"   # 매일 00:30 UTC (KST 09:30)
 
 permissions:
   contents: write
@@ -41,40 +53,35 @@ jobs:
             pip install pandas yfinance
           fi
 
-   - name: Load config.json -> env
+      - name: Load config.json -> env (optional)
         run: |
           python - << 'PY'
           import json, os, sys
-          path = 'config.json'
-          if not os.path.exists(path):
-            print("config.json not found; skip loading.")
+          p = 'config.json'
+          if not os.path.exists(p):
             sys.exit(0)
-          cfg = json.load(open(path, encoding='utf-8'))
-          def join(lst): 
-            return ",".join(str(x) for x in lst)
-          tickers = join(cfg.get("tickers", [])) or "AAPL"
-          dates   = join(cfg.get("dates", []))   or "2024-06-03"
-          params  = cfg.get("params", {})
+          cfg = json.load(open(p, encoding='utf-8'))
+          j = lambda x: ",".join(map(str, x))
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-            f.write(f"TICKERS={tickers}\n")
-            f.write(f"DATES={dates}\n")
-            f.write(f"RSI_LEN={params.get('rsi_len', 14)}\n")
-            f.write(f"STOCH_LEN={params.get('stoch_len', 14)}\n")
-            f.write(f"SMOOTH_K={params.get('smooth_k', 3)}\n")
-            f.write(f"SMOOTH_D={params.get('smooth_d', 3)}\n")
-            f.write(f"SMA_WINDOW={params.get('sma_window', 200)}\n")
-          print("Loaded config.json into environment.")
+            f.write(f"TICKERS={j(cfg.get('tickers', [])) or 'AAPL'}\n")
+            f.write(f"DATES={j(cfg.get('dates', [])) or '2024-06-03'}\n")
+            prm = cfg.get('params', {})
+            f.write(f"RSI_LEN={prm.get('rsi_len', 14)}\n")
+            f.write(f"STOCH_LEN={prm.get('stoch_len', 14)}\n")
+            f.write(f"SMOOTH_K={prm.get('smooth_k', 3)}\n")
+            f.write(f"SMOOTH_D={prm.get('smooth_d', 3)}\n")
+            f.write(f"SMA_WINDOW={prm.get('sma_window', 200)}\n")
           PY
-          
+
       - name: Run indicator script
         env:
-          TICKERS:     ${{ github.event.inputs.TICKERS     || 'AAPL,MSFT,005930.KS' }}
-          DATES:       ${{ github.event.inputs.DATES       || '2024-06-03' }}
-          RSI_LEN:     ${{ github.event.inputs.RSI_LEN     || '14' }}
-          STOCH_LEN:   ${{ github.event.inputs.STOCH_LEN   || '14' }}
-          SMOOTH_K:    ${{ github.event.inputs.SMOOTH_K    || '3' }}
-          SMOOTH_D:    ${{ github.event.inputs.SMOOTH_D    || '3' }}
-          SMA_WINDOW:  ${{ github.event.inputs.SMA_WINDOW  || '200' }}
+          TICKERS:     ${{ env.TICKERS || github.event.inputs.TICKERS || 'AAPL,MSFT,005930.KS' }}
+          DATES:       ${{ env.DATES   || github.event.inputs.DATES   || '2024-06-03' }}
+          RSI_LEN:     ${{ env.RSI_LEN || github.event.inputs.RSI_LEN || '14' }}
+          STOCH_LEN:   ${{ env.STOCH_LEN || github.event.inputs.STOCH_LEN || '14' }}
+          SMOOTH_K:    ${{ env.SMOOTH_K || github.event.inputs.SMOOTH_K || '3' }}
+          SMOOTH_D:    ${{ env.SMOOTH_D || github.event.inputs.SMOOTH_D || '3' }}
+          SMA_WINDOW:  ${{ env.SMA_WINDOW || github.event.inputs.SMA_WINDOW || '200' }}
         run: |
           python indicator_lookup.py
 
@@ -85,7 +92,6 @@ jobs:
           path: indicators_result.csv
           if-no-files-found: error
 
-      # 📌 CSV -> HTML with DataTables
       - name: Make site (CSV -> HTML with DataTables)
         run: |
           python - << 'PY'
@@ -108,40 +114,24 @@ jobs:
           </head>
           <body>
             <h1>Indicators Result</h1>
-            <p class="meta">
-              최신 CSV: <a href="./indicators_result.csv" download>다운로드</a>
-            </p>
-            <table id="tbl" class="display" style="width:100%">
-              <thead></thead>
-              <tbody></tbody>
-            </table>
+            <p class="meta">최신 CSV: <a href="./indicators_result.csv" download>다운로드</a></p>
+            <table id="tbl" class="display" style="width:100%"><thead></thead><tbody></tbody></table>
             <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
             <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
             <script>
               Papa.parse('indicators_result.csv?t=' + Date.now(), {
-                download: true,
-                header: true,
-                dynamicTyping: true,
+                download: true, header: true, dynamicTyping: true,
                 complete: (res) => {
-                  const data = res.data.filter(row => Object.keys(row).length);
-                  if(!data.length) return;
+                  const data = res.data.filter(r => Object.keys(r).length);
+                  if (!data.length) return;
                   const cols = Object.keys(data[0]);
                   $('#tbl thead').html('<tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr>');
-                  const rowsHtml = data.map(r => '<tr>' + cols.map(c => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>').join('');
-                  $('#tbl tbody').html(rowsHtml);
+                  $('#tbl tbody').html(data.map(r => '<tr>' + cols.map(c => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>').join(''));
                   $('#tbl').DataTable({
-                    pageLength: 25,
-                    lengthMenu: [10, 25, 50, 100],
-                    order: [],
-                    language: {
-                      search: '검색:',
-                      lengthMenu: '_MENU_ 개씩 보기',
-                      info: '_TOTAL_개 중 _START_–_END_',
-                      infoEmpty: '표시할 항목 없음',
-                      zeroRecords: '일치하는 항목이 없습니다',
-                      paginate: { first:'처음', last:'마지막', next:'다음', previous:'이전' }
-                    }
+                    pageLength: 25, lengthMenu: [10,25,50,100], order: [],
+                    language: { search:'검색:', lengthMenu:'_MENU_ 개씩 보기', info:'_TOTAL_개 중 _START_–_END_', infoEmpty:'표시할 항목 없음', zeroRecords:'일치하는 항목이 없습니다',
+                      paginate:{ first:'처음', last:'마지막', next:'다음', previous:'이전' } }
                   });
                 }
               });
