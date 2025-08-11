@@ -14,40 +14,24 @@
 </head>
 <body>
   <h1>Indicators Result</h1>
-  <p class="meta">
-    최신 CSV: <a href="./indicators_result.csv" download>다운로드</a>
-  </p>
-  <table id="tbl" class="display" style="width:100%">
-    <thead></thead>
-    <tbody></tbody>
-  </table>
+  <p class="meta">최신 CSV: <a href="./indicators_result.csv" download>다운로드</a></p>
+  <table id="tbl" class="display" style="width:100%"><thead></thead><tbody></tbody></table>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
     Papa.parse('indicators_result.csv?t=' + Date.now(), {
-      download: true,
-      header: true,
-      dynamicTyping: true,
+      download: true, header: true, dynamicTyping: true,
       complete: (res) => {
-        const data = res.data.filter(row => Object.keys(row).length);
-        if(!data.length) return;
+        const data = res.data.filter(r => Object.keys(r).length);
+        if (!data.length) return;
         const cols = Object.keys(data[0]);
         $('#tbl thead').html('<tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr>');
-        const rowsHtml = data.map(r => '<tr>' + cols.map(c => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>').join('');
-        $('#tbl tbody').html(rowsHtml);
+        $('#tbl tbody').html(data.map(r => '<tr>' + cols.map(c => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>').join(''));
         $('#tbl').DataTable({
-          pageLength: 25,
-          lengthMenu: [10, 25, 50, 100],
-          order: [],
-          language: {
-            search: '검색:',
-            lengthMenu: '_MENU_ 개씩 보기',
-            info: '_TOTAL_개 중 _START_–_END_',
-            infoEmpty: '표시할 항목 없음',
-            zeroRecords: '일치하는 항목이 없습니다',
-            paginate: { first:'처음', last:'마지막', next:'다음', previous:'이전' }
-          }
+          pageLength: 25, lengthMenu: [10,25,50,100], order: [],
+          language: { search:'검색:', lengthMenu:'_MENU_ 개씩 보기', info:'_TOTAL_개 중 _START_–_END_', infoEmpty:'표시할 항목 없음', zeroRecords:'일치하는 항목이 없습니다',
+            paginate:{ first:'처음', last:'마지막', next:'다음', previous:'이전' } }
         });
       }
     });
