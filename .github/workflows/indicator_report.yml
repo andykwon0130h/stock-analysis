@@ -41,6 +41,31 @@ jobs:
             pip install pandas yfinance
           fi
 
+   - name: Load config.json -> env
+        run: |
+          python - << 'PY'
+          import json, os, sys
+          path = 'config.json'
+          if not os.path.exists(path):
+            print("config.json not found; skip loading.")
+            sys.exit(0)
+          cfg = json.load(open(path, encoding='utf-8'))
+          def join(lst): 
+            return ",".join(str(x) for x in lst)
+          tickers = join(cfg.get("tickers", [])) or "AAPL"
+          dates   = join(cfg.get("dates", []))   or "2024-06-03"
+          params  = cfg.get("params", {})
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+            f.write(f"TICKERS={tickers}\n")
+            f.write(f"DATES={dates}\n")
+            f.write(f"RSI_LEN={params.get('rsi_len', 14)}\n")
+            f.write(f"STOCH_LEN={params.get('stoch_len', 14)}\n")
+            f.write(f"SMOOTH_K={params.get('smooth_k', 3)}\n")
+            f.write(f"SMOOTH_D={params.get('smooth_d', 3)}\n")
+            f.write(f"SMA_WINDOW={params.get('sma_window', 200)}\n")
+          print("Loaded config.json into environment.")
+          PY
+          
       - name: Run indicator script
         env:
           TICKERS:     ${{ github.event.inputs.TICKERS     || 'AAPL,MSFT,005930.KS' }}
