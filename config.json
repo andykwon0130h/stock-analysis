@@ -1,6 +1,6 @@
 {
-  "tickers": ["AAPL", "MSFT", "005930.KS"],
-  "dates": ["2024-06-03", "2023-10-31"],
+  "tickers": ["OKLO", "PLTR"],
+  "dates": ["2025-04-29", "2025-04-31"],
   "params": {
     "rsi_len": 14,
     "stoch_len": 14,
