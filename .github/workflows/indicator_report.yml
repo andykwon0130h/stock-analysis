@@ -1,0 +1,108 @@
+name: Indicator Report + Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      TICKERS:
+        description: "Comma-separated tickers (e.g., AAPL,MSFT,005930.KS)"
+        default: "AAPL,MSFT,005930.KS"
+      DATES:
+        description: "Comma-separated dates YYYY-MM-DD (e.g., 2024-06-03,2023-10-31)"
+        default: "2024-06-03"
+      RSI_LEN:
+        default: "14"
+      STOCH_LEN:
+        default: "14"
+      SMOOTH_K:
+        default: "3"
+      SMOOTH_D:
+        default: "3"
+      SMA_WINDOW:
+        default: "200"
+  # 필요 없으면 아래 schedule 블록 삭제해도 됨
+  schedule:
+    - cron: "30 0 * * *"  # 매일 00:30 UTC (KST 09:30)
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run indicator script
+        env:
+          TICKERS: ${{ github.event.inputs.TICKERS || 'AAPL,MSFT,005930.KS' }}
+          DATES: ${{ github.event.inputs.DATES || '2024-06-03' }}
+          RSI_LEN: ${{ github.event.inputs.RSI_LEN || '14' }}
+          STOCH_LEN: ${{ github.event.inputs.STOCH_LEN || '14' }}
+          SMOOTH_K: ${{ github.event.inputs.SMOOTH_K || '3' }}
+          SMOOTH_D: ${{ github.event.inputs.SMOOTH_D || '3' }}
+          SMA_WINDOW: ${{ github.event.inputs.SMA_WINDOW || '200' }}
+        run: |
+          python indicator_lookup.py
+
+      - name: (Optional) Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: indicators_result
+          path: indicators_result.csv
+          if-no-files-found: error
+
+      # CSV -> index.html 생성
+      - name: Make site (CSV -> HTML)
+        run: |
+          python - << 'PY'
+          import pandas as pd, os, html
+          from datetime import datetime, timezone
+          df = pd.read_csv('indicators_result.csv')
+          table = df.to_html(index=False, border=0, classes='data-table')
+          updated = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+          html_doc = f"""<!doctype html>
+          <html lang="ko">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Indicators Result</title>
+            <style>
+              body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:24px}}
+              h1{{margin:0 0 8px}}
+              .meta{{color:#666; margin:0 0 16px}}
+              table{{border-collapse:collapse; width:100%}}
+              th,td{{padding:10px; border-bottom:1px solid #eee; text-align:left}}
+              tr:hover{{background:#fafafa}}
+              .data-table thead th{{position:sticky; top:0; background:#fff}}
+              .bar{{display:inline-block; height:8px; min-width:2px}}
+            </style>
+          </head>
+          <body>
+            <h1>Indicators Result</h1>
+            <p class="meta">Updated: {updated}</p>
+            <p><a href="./indicators_result.csv" download>CSV 다운로드</a></p>
+            {table}
+          </body>
+          </html>"""
+          os.makedirs('public', exist_ok=True)
+          open('public/index.html','w',encoding='utf-8').write(html_doc)
+          # CSV도 사이트에 함께 배포
+          import shutil
+          shutil.copyfile('indicators_result.csv', 'public/indicators_result.csv')
+          PY
+
+      # GH Pages 배포 (gh-pages 브랜치)
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          # cname: your.custom.domain
