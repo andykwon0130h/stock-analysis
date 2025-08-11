@@ -145,10 +145,12 @@ def compute_for(
     return row
 
 def main():
-    # 환경변수 + config.json 병행 지원
     import json
-    tickers = os.getenv("TICKERS")
-    dates   = os.getenv("DATES")
+    from datetime import datetime
+
+    # 1) 환경변수 우선, 없으면 config.json 사용
+    tickers_env = os.getenv("TICKERS", "")
+    dates_env   = os.getenv("DATES", "")
     rsi_len = int(os.getenv("RSI_LEN", "14"))
     st_len  = int(os.getenv("STOCH_LEN", "14"))
     sm_k    = int(os.getenv("SMOOTH_K", "3"))
@@ -156,23 +158,42 @@ def main():
     sma_w   = int(os.getenv("SMA_WINDOW", "200"))
     align   = os.getenv("ALIGN", "prev")  # prev/next/exact
 
-    if not tickers or not dates:
-        # config.json 지원
-        if os.path.exists("config.json"):
-            cfg = json.load(open("config.json", encoding="utf-8"))
-            tickers = ",".join(cfg.get("tickers", [])) or "AAPL"
-            dates   = ",".join(cfg.get("dates", [])) or "2024-06-03"
-            p = cfg.get("params", {})
-            rsi_len = int(p.get("rsi_len", rsi_len))
-            st_len  = int(p.get("stoch_len", st_len))
-            sm_k    = int(p.get("smooth_k", sm_k))
-            sm_d    = int(p.get("smooth_d", sm_d))
-            sma_w   = int(p.get("sma_window", sma_w))
-            align   = p.get("align", align)
+    if (not tickers_env.strip() or not dates_env.strip()) and os.path.exists("config.json"):
+        cfg = json.load(open("config.json", encoding="utf-8"))
+        if not tickers_env.strip():
+            tickers_env = ",".join(cfg.get("tickers", []))
+        if not dates_env.strip():
+            dates_env   = ",".join(cfg.get("dates", []))
+        p = cfg.get("params", {})
+        rsi_len = int(p.get("rsi_len", rsi_len))
+        st_len  = int(p.get("stoch_len", st_len))
+        sm_k    = int(p.get("smooth_k", sm_k))
+        sm_d    = int(p.get("smooth_d", sm_d))
+        sma_w   = int(p.get("sma_window", sma_w))
+        align   = p.get("align", align)
 
-    tickers_list = [t.strip() for t in tickers.split(",")]
-    dates_list   = [d.strip() for d in dates.split(",")]
+    # 2) 티커/날짜 전처리
+    tickers_list = [t.strip() for t in (tickers_env or "AAPL").split(",") if t.strip()]
 
+    # 날짜: 공백 제거 + 빈 값 삭제 + 형식 검증(YYYY-MM-DD)
+    raw_dates = [d.strip() for d in (dates_env or "2024-06-03").split(",")]
+    dates_list = []
+    for d in raw_dates:
+        if not d:  # ← 공백/빈 문자열이면 스킵
+            continue
+        try:
+            datetime.strptime(d, "%Y-%m-%d")
+        except ValueError:
+            # 형식이 틀리면 스킵(테이블에 에러 행을 남기고 싶다면 여기에 rows.append로 기록해도 됨)
+            print(f"[경고] 무시된 날짜: '{d}' (형식은 YYYY-MM-DD)")
+            continue
+        dates_list.append(d)
+
+    if not dates_list:
+        print("[오류] 유효한 날짜가 없습니다. 예: 2025-04-29")
+        sys.exit(1)
+
+    # 3) 계산 실행
     rows = []
     for t in tickers_list:
         for d in dates_list:
@@ -184,6 +205,8 @@ def main():
                     sma_window=sma_w, align=align
                 )
             )
+
+    # 4) 저장/출력
     df = pd.DataFrame(rows, columns=[
         "Ticker","RequestedDate","ReportDate","Close",
         f"RSI_{rsi_len}",
