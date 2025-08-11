@@ -85,6 +85,7 @@ def us10y_yield_at_kst(date_kst: datetime):
         tnx_kst = to_kst_index(tnx).loc[:ts_kst]
         # ^TNX의 Close는 10배 스케일(예: 45.67 -> 4.567%)
         val = float(tnx_kst["Close"].iloc[-1]) / 10.0
+        df.at[i, "US10Y_Yield_%"] = f"{val:.2f}%"
         return val
     except Exception:
         return None
