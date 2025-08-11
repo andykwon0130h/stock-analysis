@@ -9,19 +9,16 @@ on:
       DATES:
         description: "Comma-separated dates YYYY-MM-DD (e.g., 2024-06-03,2023-10-31)"
         default: "2024-06-03"
-      RSI_LEN:
-        default: "14"
-      STOCH_LEN:
-        default: "14"
-      SMOOTH_K:
-        default: "3"
-      SMOOTH_D:
-        default: "3"
-      SMA_WINDOW:
-        default: "200"
-  # 필요 없으면 아래 schedule 블록 삭제해도 됨
+      RSI_LEN:    { default: "14" }
+      STOCH_LEN:  { default: "14" }
+      SMOOTH_K:   { default: "3" }
+      SMOOTH_D:   { default: "3" }
+      SMA_WINDOW: { default: "200" }
   schedule:
     - cron: "30 0 * * *"  # 매일 00:30 UTC (KST 09:30)
+
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
@@ -38,50 +35,50 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install pandas yfinance
+          fi
 
       - name: Run indicator script
         env:
-          TICKERS: ${{ github.event.inputs.TICKERS || 'AAPL,MSFT,005930.KS' }}
-          DATES: ${{ github.event.inputs.DATES || '2024-06-03' }}
-          RSI_LEN: ${{ github.event.inputs.RSI_LEN || '14' }}
-          STOCH_LEN: ${{ github.event.inputs.STOCH_LEN || '14' }}
-          SMOOTH_K: ${{ github.event.inputs.SMOOTH_K || '3' }}
-          SMOOTH_D: ${{ github.event.inputs.SMOOTH_D || '3' }}
-          SMA_WINDOW: ${{ github.event.inputs.SMA_WINDOW || '200' }}
+          TICKERS:     ${{ github.event.inputs.TICKERS     || 'AAPL,MSFT,005930.KS' }}
+          DATES:       ${{ github.event.inputs.DATES       || '2024-06-03' }}
+          RSI_LEN:     ${{ github.event.inputs.RSI_LEN     || '14' }}
+          STOCH_LEN:   ${{ github.event.inputs.STOCH_LEN   || '14' }}
+          SMOOTH_K:    ${{ github.event.inputs.SMOOTH_K    || '3' }}
+          SMOOTH_D:    ${{ github.event.inputs.SMOOTH_D    || '3' }}
+          SMA_WINDOW:  ${{ github.event.inputs.SMA_WINDOW  || '200' }}
         run: |
           python indicator_lookup.py
 
-      - name: (Optional) Upload CSV artifact
+      - name: Upload CSV artifact
         uses: actions/upload-artifact@v4
         with:
           name: indicators_result
           path: indicators_result.csv
           if-no-files-found: error
 
-      # CSV -> HTML(DataTables) 생성
+      # 📌 CSV -> HTML with DataTables
       - name: Make site (CSV -> HTML with DataTables)
         run: |
           python - << 'PY'
-          import os, shutil, time
+          import os, shutil
           os.makedirs('public', exist_ok=True)
-          # CSV를 사이트에 포함
           shutil.copyfile('indicators_result.csv', 'public/indicators_result.csv')
-          # DataTables + PapaParse 기반 인덱스 페이지
-          html = f"""<!doctype html>
+          html_doc = """<!doctype html>
           <html lang="ko">
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <title>Indicators Result</title>
-            <!-- DataTables CSS -->
             <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
             <style>
-              body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:24px}}
-              h1{{margin:0 0 8px}}
-              .meta{{color:#666; margin:0 0 16px}}
-              .controls{{margin:12px 0}}
-              table.dataTable thead th{{position:sticky; top:0; background:#fff}}
+              body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:24px}
+              h1{margin:0 0 8px}
+              .meta{color:#666; margin:0 0 16px}
+              table.dataTable thead th{position:sticky; top:0; background:#fff}
             </style>
           </head>
           <body>
@@ -89,74 +86,48 @@ jobs:
             <p class="meta">
               최신 CSV: <a href="./indicators_result.csv" download>다운로드</a>
             </p>
-
-            <div class="controls">
-              <label>빠른 검색: <input id="globalSearch" type="search" placeholder="티커, 날짜 등 입력"></label>
-            </div>
-
             <table id="tbl" class="display" style="width:100%">
               <thead></thead>
               <tbody></tbody>
             </table>
-
-            <!-- jQuery + DataTables + PapaParse -->
             <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
             <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
             <script>
-              // CSV 로드 후 테이블 렌더
-              const csvUrl = 'indicators_result.csv?t=' + Date.now(); // 캐시 방지
-              Papa.parse(csvUrl, {{
+              Papa.parse('indicators_result.csv?t=' + Date.now(), {
                 download: true,
                 header: true,
                 dynamicTyping: true,
-                complete: (res) => {{
-                  const data = res.data.filter(row => Object.keys(row).length); // 빈행 제거
+                complete: (res) => {
+                  const data = res.data.filter(row => Object.keys(row).length);
                   if(!data.length) return;
-
-                  // 헤더 작성
                   const cols = Object.keys(data[0]);
-                  const thead = document.querySelector('#tbl thead');
-                  thead.innerHTML = '<tr>' + cols.map(c=>`<th>${{c}}</th>`).join('') + '</tr>';
-
-                  // 바디 작성
-                  const tbody = document.querySelector('#tbl tbody');
-                  const rowsHtml = data.map(r => 
-                    '<tr>' + cols.map(c => `<td>${{r[c]===null||r[c]===undefined?'':r[c]}}</td>`).join('') + '</tr>'
-                  ).join('');
-                  tbody.innerHTML = rowsHtml;
-
-                  // 숫자 컬럼 자동 감지 정렬을 위해 DataTables 초기화
-                  const table = new DataTable('#tbl', {{
+                  $('#tbl thead').html('<tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr>');
+                  const rowsHtml = data.map(r => '<tr>' + cols.map(c => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>').join('');
+                  $('#tbl tbody').html(rowsHtml);
+                  $('#tbl').DataTable({
                     pageLength: 25,
                     lengthMenu: [10, 25, 50, 100],
-                    order: [], // 기본 정렬 없음
-                    language: {{
+                    order: [],
+                    language: {
                       search: '검색:',
                       lengthMenu: '_MENU_ 개씩 보기',
                       info: '_TOTAL_개 중 _START_–_END_',
                       infoEmpty: '표시할 항목 없음',
                       zeroRecords: '일치하는 항목이 없습니다',
-                      paginate: {{ first:'처음', last:'마지막', next:'다음', previous:'이전' }}
-                    }}
-                  }});
-
-                  // 전역 검색 입력과 연동
-                  document.getElementById('globalSearch').addEventListener('input', (e) => {{
-                    table.search(e.target.value).draw();
-                  }});
-                }}
-              }});
+                      paginate: { first:'처음', last:'마지막', next:'다음', previous:'이전' }
+                    }
+                  });
+                }
+              });
             </script>
           </body>
           </html>"""
-          open('public/index.html','w',encoding='utf-8').write(html)
+          open('public/index.html','w',encoding='utf-8').write(html_doc)
           PY
 
-      # GH Pages 배포 (gh-pages 브랜치)
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
-          # cname: your.custom.domain
