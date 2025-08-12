@@ -59,20 +59,33 @@ def download_history(ticker: str, start_dt_kst: datetime, end_dt_kst: datetime) 
     return yf.Ticker(ticker).history(start=start, end=end, auto_adjust=False)
 
 def nasdaq_drawdown_at_kst(date_kst: datetime):
+    """
+    KST 기준 date_kst까지의 나스닥(^IXIC) 최고 종가 대비 드로우다운(%)
+    과, 해당 날짜가 사실상 신고가(ATH)인지 여부를 반환.
+    반환: (drawdown_pct: float|None, is_ath: bool|None)
+    """
     try:
         start_kst = date_kst - timedelta(days=3650)
         ixic = download_history("^IXIC", start_kst, date_kst)
         ts_kst = last_on_or_before_kst(ixic, date_kst)
         if ts_kst is None:
-            return None
+            return (None, None)
+
         ixic_kst = to_kst_index(ixic).loc[:ts_kst]
         peak_until = ixic_kst["Close"].cummax().iloc[-1]
         last_close = ixic_kst["Close"].iloc[-1]
         if peak_until == 0:
-            return None
-        return (last_close / peak_until - 1) * 100
+            return (None, None)
+
+        drawdown = (last_close / peak_until - 1.0) * 100.0
+
+        # 부동소수 오차 방지용 허용치(0.0001% 이내면 0으로 간주)
+        EPS = 1e-4
+        is_ath = abs(drawdown) < EPS
+
+        return (float(drawdown), bool(is_ath))
     except Exception:
-        return None
+        return (None, None)
 
 # 🔹 미 10년물 금리 (^TNX) 불러오기 — 단위 보정(/10 → %)
 def us10y_yield_at_kst(date_kst: datetime):
@@ -136,7 +149,13 @@ def compute_for(
     rsi = rsi_wilder(price_kst["Close"], rsi_len)
     k, d = stochastic_oscillator(price_kst, stoch_len, smooth_k, smooth_d)
     ma200 = sma(price_kst["Close"], sma_window)
-    dd = nasdaq_drawdown_at_kst(ts)
+    dd, is_ath = nasdaq_drawdown_at_kst(ts)
+    if dd is None:
+        dd_disp = None
+    elif is_ath:
+        dd_disp = "ATH"
+    else:
+        dd_disp = f"{dd:.2f}%"
     y10 = us10y_yield_at_kst(ts)  # 🔹 이 날(KST 기준)의 10년물 금리(%)
 
     gap_pct = None
@@ -154,7 +173,7 @@ def compute_for(
         f"SMA_{sma_window}": round(float(ma200.loc[ts]), 4) if pd.notna(ma200.loc[ts]) else None,
         "Gap_from_SMA200_%": round(float(gap_pct), 2) if gap_pct is not None else None,
         "US10Y_Yield_%": (f"{y10:.3f}%" if y10 is not None else None),   # 🔹 추가
-        "NASDAQ_Drawdown_%": round(float(dd), 2) if dd is not None else None,
+        "NASDAQ_Drawdown": dd_disp,
         "Error": ""
     }
     return row
@@ -224,7 +243,7 @@ def main():
         f"SMA_{sma_w}",
         "Gap_from_SMA200_%",
         "US10Y_Yield_%",            # 🔹 새 컬럼
-        "NASDAQ_Drawdown_%","Error"
+        "NASDAQ_Drawdown","Error"
     ])
     out = "indicators_result.csv"
     df.to_csv(out, index=False, encoding="utf-8-sig")
