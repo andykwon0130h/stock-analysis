@@ -76,19 +76,27 @@ def nasdaq_drawdown_at_kst(date_kst: datetime):
 
 # 🔹 미 10년물 금리 (^TNX) 불러오기 — 단위 보정(/10 → %)
 def us10y_yield_at_kst(date_kst: datetime):
+    """
+    요청한 KST '날짜' 기준으로 <= 그날 날짜의 마지막 ^TNX 일일 종가를 찾는다.
+    (^TNX는 10배 스케일이므로 /10 → %)
+    """
     try:
-        start_kst = date_kst - timedelta(days=30)  # 넉넉히 한 달
-        tnx = download_history("^TNX", start_kst, date_kst)
-        ts_kst = last_on_or_before_kst(tnx, date_kst)
-        if ts_kst is None:
+        # 여유 있게 앞뒤로 며칠 더 가져옴
+        start_kst = date_kst - timedelta(days=35)
+        end_kst   = date_kst + timedelta(days=2)
+        tnx = download_history("^TNX", start_kst, end_kst)
+        if tnx is None or tnx.empty:
             return None
-        tnx_kst = to_kst_index(tnx).loc[:ts_kst]
-        # ^TNX의 Close는 10배 스케일(예: 45.67 -> 4.567%)
-        val = float(tnx_kst["Close"].iloc[-1]) / 10.0
-        df.at[i, "US10Y_Yield_%"] = f"{val:.2f}%"
+        tnx_kst = to_kst_index(tnx)
+
+        # '시각'이 아닌 '날짜'로 비교 (KST)
+        mask = tnx_kst.index.date <= date_kst.date()
+        if not mask.any():
+            return None
+        val = float(tnx_kst.loc[mask, "Close"].iloc[-1]) / 10.0  # 10배 스케일 보정 → %
         return val
     except Exception:
-        return None
+        return None 
 
 def compute_for(
     ticker: str,
@@ -145,7 +153,7 @@ def compute_for(
         f"Stoch%D({smooth_d})": round(float(d.loc[ts]), 2) if pd.notna(d.loc[ts]) else None,
         f"SMA_{sma_window}": round(float(ma200.loc[ts]), 4) if pd.notna(ma200.loc[ts]) else None,
         "Gap_from_SMA200_%": round(float(gap_pct), 2) if gap_pct is not None else None,
-        "US10Y_Yield_%": round(float(y10), 2) if y10 is not None else None,   # 🔹 추가
+        "US10Y_Yield_%": (f"{float(y10):.2f}%" if y10 is not None else None),   # 🔹 추가
         "NASDAQ_Drawdown_%": round(float(dd), 2) if dd is not None else None,
         "Error": ""
     }
