@@ -93,7 +93,7 @@ def us10y_yield_at_kst(date_kst: datetime):
         mask = tnx_kst.index.date <= date_kst.date()
         if not mask.any():
             return None
-        val = float(tnx_kst.loc[mask, "Close"].iloc[-1]) / 10.0  # 10배 스케일 보정 → %
+        val = float(tnx_kst.loc[mask, "Close"].iloc[-1])  # 10배 스케일 보정 → %
         return val
     except Exception:
         return None 
@@ -153,7 +153,7 @@ def compute_for(
         f"Stoch%D({smooth_d})": round(float(d.loc[ts]), 2) if pd.notna(d.loc[ts]) else None,
         f"SMA_{sma_window}": round(float(ma200.loc[ts]), 4) if pd.notna(ma200.loc[ts]) else None,
         "Gap_from_SMA200_%": round(float(gap_pct), 2) if gap_pct is not None else None,
-        "US10Y_Yield_%": (f"{float(y10)}%" if y10 is not None else None),   # 🔹 추가
+        "US10Y_Yield_%": (f"{float(y10.2f)}%" if y10 is not None else None),   # 🔹 추가
         "NASDAQ_Drawdown_%": round(float(dd), 2) if dd is not None else None,
         "Error": ""
     }
